@@ -221,5 +221,31 @@ namespace Microsoft.IdentityModel.Tokens
                    || (exception as SecurityTokenUnableToValidateException)?.ValidationFailure != ValidationFailure.InvalidLifetime
                    || exception is SecurityTokenSignatureKeyNotFoundException;
         }
+
+        /// <summary>
+        /// Check whether the given configuration is recoverable by LKG.
+        /// </summary>
+        /// <param name="validationParameters">The <see cref="TokenValidationParameters"/> to be used for validation.</param>
+        /// <param name="configuration">The <see cref="BaseConfiguration"/> to check.</param>
+        /// <param name="currentConfiguration">The updated <see cref="BaseConfiguration"/>.</param>
+        /// <returns><c>true</c> if the configuration is recoverable otherwise, <c>false</c>.</returns>
+        internal static bool IsRecoverableConfiguration(TokenValidationParameters validationParameters, BaseConfiguration configuration, out BaseConfiguration currentConfiguration)
+        {
+            bool isRecoverableConfiguration = (validationParameters.ConfigurationManager.UseLastKnownGoodConfiguration
+                && validationParameters.ConfigurationManager.LastKnownGoodConfiguration != null
+                && !ReferenceEquals(configuration, validationParameters.ConfigurationManager.LastKnownGoodConfiguration));
+
+            currentConfiguration = configuration;
+            if (isRecoverableConfiguration)
+            {
+                // Inform the user that the LKG is expired.
+                if (!validationParameters.ConfigurationManager.IsLastKnownGoodValid)
+                    LogHelper.LogInformation(TokenLogMessages.IDX10263);
+                else                
+                    currentConfiguration = validationParameters.ConfigurationManager.LastKnownGoodConfiguration;
+            }
+
+            return isRecoverableConfiguration;
+        }
     }
 }

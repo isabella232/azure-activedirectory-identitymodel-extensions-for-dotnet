@@ -1031,21 +1031,12 @@ namespace Microsoft.IdentityModel.JsonWebTokens
                 // we want to make sure that the clause for SecurityTokenUnableToValidateException is hit so that the ValidationFailure is checked
                 else if (TokenUtilities.IsRecoverableException(tokenValidationResult.Exception))
                 {
-                    if (validationParameters.ConfigurationManager.UseLastKnownGoodConfiguration
-                        && validationParameters.ConfigurationManager.LastKnownGoodConfiguration != null
-                        && validationParameters.ConfigurationManager.LastKnownGoodConfiguration != currentConfiguration)
+                    if (TokenUtilities.IsRecoverableConfiguration(validationParameters, currentConfiguration, out currentConfiguration))
                     {
-                        // Inform the user that the LKG is expired.
-                        if (!validationParameters.ConfigurationManager.IsLastKnownGoodValid)
-                            LogHelper.LogInformation(TokenLogMessages.IDX10263);
-                        else
-                        {
-                            currentConfiguration = validationParameters.ConfigurationManager.LastKnownGoodConfiguration;
-                            tokenValidationResult = decryptedJwt != null ? ValidateJWE(outerToken, decryptedJwt, validationParameters, currentConfiguration) : ValidateJWS(token, validationParameters, currentConfiguration); 
+                        tokenValidationResult = decryptedJwt != null ? ValidateJWE(outerToken, decryptedJwt, validationParameters, currentConfiguration) : ValidateJWS(token, validationParameters, currentConfiguration);
 
-                            if (tokenValidationResult.IsValid)
-                                return tokenValidationResult;
-                        }
+                        if (tokenValidationResult.IsValid)
+                            return tokenValidationResult;
                     }
 
                     // If we were still unable to validate, attempt to refresh the configuration and validate using it

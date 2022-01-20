@@ -745,21 +745,16 @@ namespace System.IdentityModel.Tokens.Jwt
             if (tokenParts.Length != JwtConstants.JwsSegmentCount && tokenParts.Length != JwtConstants.JweSegmentCount)
                 throw LogHelper.LogExceptionMessage(new ArgumentException(LogHelper.FormatInvariant(LogMessages.IDX12741, token)));
 
-            ClaimsPrincipal claimsPrincipal;
-            SecurityToken signatureValidatedToken;
             if (tokenParts.Length == JwtConstants.JweSegmentCount)
             {
                 var jwtToken = ReadJwtToken(token);
                 var decryptedJwt = DecryptToken(jwtToken, validationParameters);
-                claimsPrincipal = ValidateToken(decryptedJwt, jwtToken, validationParameters, out signatureValidatedToken);
+                return ValidateToken(decryptedJwt, jwtToken, validationParameters, out validatedToken);
             }
             else
             {
-                claimsPrincipal = ValidateToken(token, null, validationParameters, out signatureValidatedToken);
+                return ValidateToken(token, null, validationParameters, out validatedToken);
             }
-
-            validatedToken = signatureValidatedToken;
-            return claimsPrincipal;
         }
 
         /// <summary>
@@ -804,26 +799,15 @@ namespace System.IdentityModel.Tokens.Jwt
 
                     return claimsPrincipal;
                 }
-                // using 'GetType()' instead of 'is' as SecurityTokenUnableToValidException (and others) extend SecurityTokenInvalidSignatureException
-                // we want to make sure that the clause for SecurityTokenUnableToValidateException is hit so that the ValidationFailure is checked
                 else if (TokenUtilities.IsRecoverableException(exceptionThrown.SourceException))
                 {
-                    if (validationParameters.ConfigurationManager.UseLastKnownGoodConfiguration
-                        && validationParameters.ConfigurationManager.LastKnownGoodConfiguration != null
-                        && validationParameters.ConfigurationManager.LastKnownGoodConfiguration != currentConfiguration)
+                    if (TokenUtilities.IsRecoverableConfiguration(validationParameters, currentConfiguration, out currentConfiguration))
                     {
-                        // Inform the user that the LKG is expired.
-                        if (!validationParameters.ConfigurationManager.IsLastKnownGoodValid)
-                            LogHelper.LogInformation(TokenLogMessages.IDX10263);
-                        else
-                        {
-                            currentConfiguration = validationParameters.ConfigurationManager.LastKnownGoodConfiguration;
-                            claimsPrincipal = outerToken != null ? ValidateJWE(token, outerToken, validationParameters, currentConfiguration, out signatureValidatedToken, out exceptionThrown) :
-                                ValidateJWS(token, validationParameters, currentConfiguration, out signatureValidatedToken, out exceptionThrown);
+                        claimsPrincipal = outerToken != null ? ValidateJWE(token, outerToken, validationParameters, currentConfiguration, out signatureValidatedToken, out exceptionThrown) :
+                            ValidateJWS(token, validationParameters, currentConfiguration, out signatureValidatedToken, out exceptionThrown);
 
-                            if (claimsPrincipal != null)
-                                return claimsPrincipal;
-                        }
+                        if (claimsPrincipal != null)
+                            return claimsPrincipal;
                     }
 
                     // If we were still unable to validate, attempt to refresh the configuration and validate using it
@@ -853,10 +837,15 @@ namespace System.IdentityModel.Tokens.Jwt
             return null;
         }
 
-        private ClaimsPrincipal ValidateJWE(string decryptedJwt, JwtSecurityToken outerToken, TokenValidationParameters validationParameters, BaseConfiguration currentConfiguration, out SecurityToken signatureValidatedToken, out ExceptionDispatchInfo exceptionThrown)
+        private ClaimsPrincipal ValidateJWE(
+            string decryptedJwt,
+            JwtSecurityToken outerToken,
+            TokenValidationParameters validationParameters,
+            BaseConfiguration currentConfiguration,
+            out SecurityToken signatureValidatedToken,
+            out ExceptionDispatchInfo exceptionThrown)
         {
             exceptionThrown = null;
-            signatureValidatedToken = null;
             try
             {
                 var innerToken = ValidateSignature(decryptedJwt, validationParameters, currentConfiguration);
@@ -867,14 +856,19 @@ namespace System.IdentityModel.Tokens.Jwt
             catch (Exception ex)
             {
                 exceptionThrown = ExceptionDispatchInfo.Capture(ex);
+                signatureValidatedToken = null;
                 return null;
             }
         }
 
-        private ClaimsPrincipal ValidateJWS(string token, TokenValidationParameters validationParameters, BaseConfiguration currentConfiguration, out SecurityToken signatureValidatedToken, out ExceptionDispatchInfo exceptionThrown)
+        private ClaimsPrincipal ValidateJWS(
+            string token,
+            TokenValidationParameters validationParameters,
+            BaseConfiguration currentConfiguration,
+            out SecurityToken signatureValidatedToken,
+            out ExceptionDispatchInfo exceptionThrown)
         {
             exceptionThrown = null;
-            signatureValidatedToken = null;
             try
             {
                 signatureValidatedToken = ValidateSignature(token, validationParameters, currentConfiguration);
@@ -883,6 +877,7 @@ namespace System.IdentityModel.Tokens.Jwt
             catch (Exception ex)
             {
                 exceptionThrown = ExceptionDispatchInfo.Capture(ex);
+                signatureValidatedToken = null;
                 return null;
             }
         }
